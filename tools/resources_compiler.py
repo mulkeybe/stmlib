@@ -84,11 +84,11 @@ class ResourceEntry(object):
     if self._table.python_type == float:
       f.write('%(declaration)s = {\n' % locals())
       n_elements = len(self._value)
-      for i in xrange(0, n_elements, 4):
+      for i in range(0, n_elements, 4):
         f.write('  ');
         f.write(', '.join(
             '% 16.9e' % self._value[j] \
-            for j in xrange(i, min(n_elements, i + 4))))
+            for j in range(i, min(n_elements, i + 4))))
         f.write(',\n');
       f.write('};\n')
     elif self._table.python_type == str:
@@ -97,12 +97,12 @@ class ResourceEntry(object):
     else:
       f.write('%(declaration)s = {\n' % locals())
       n_elements = len(self._value)
-      for i in xrange(0, n_elements, 4):
+      for i in range(0, n_elements, 4):
         f.write('  ');
         f.write(', '.join(
             '%6d' % self._value[j] if self._value[j] < 1 << 31 else \
                 '%6dUL' % self._value[j] \
-            for j in xrange(i, min(n_elements, i + 4))))
+            for j in range(i, min(n_elements, i + 4))))
         f.write(',\n');
       f.write('};\n')
     
@@ -272,7 +272,7 @@ def Compile(path):
 
 
 def main(argv):
-  for i in xrange(1, len(argv)):
+  for i in range(1, len(argv)):
     Compile(argv[i])
 
 
