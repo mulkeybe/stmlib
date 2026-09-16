@@ -157,9 +157,9 @@ class ResourceTable(object):
 
     table = str.maketrans(
         in_chr,
-        ''.join(map(chr, out_chr)))
-    bad_chars = '\t\n\r-:()[]"\',;'
-    self._MakeIdentifier = lambda s: s.translate(table, bad_chars)
+        ''.join(map(chr, out_chr)),
+        '\t\n\r-:()[]"\',;')
+    self._MakeIdentifier = lambda s: s.translate(table)
 
   def DeclareEntries(self, f):
     if self.python_type != str:
