@@ -58,6 +58,7 @@ class ResourceEntry(object):
 
   def Declare(self, f):
     if self._dupe_of == self._key:
+      # Dupes are not declared.
       f.write('extern %s;\n' % self.declaration)
 
   def DeclareAlias(self, f):
@@ -75,6 +76,7 @@ class ResourceEntry(object):
       f.write('#define %(prefix)s_%(key)s_SIZE %(size)d\n' % locals())
 
   def Compile(self, f):
+    # Do not create declaration for dupes.
     if self._dupe_of != self._key:
       return
 
@@ -119,28 +121,13 @@ class ResourceTable(object):
     values = {}
     for index, entry in enumerate(resource_tuple[0]):
       if self.python_type == str:
+        # There is no name/value for string entries
         key, value = entry, entry.strip()
       else:
         key, value = entry
 
+      # Add a prefix to avoid key duplicates.
       in_ram = 'IN_RAM' in key
       key = key.replace('IN_RAM', '')
-      key = self._MakeIdentifier(key)
-      while key in keys:
-        key = '_%s' % key
-      keys.add(key)
-      hashable_value = tuple(value)
-      self.entries.append(ResourceEntry(
-          index, key, value,
-          values.get(hashable_value, None),
-          self, in_ram))
-      if hashable_value not in values:
-        values[hashable_value] = key
-
-  def _ComputeIdentifierRewriteTable(self):
-    in_chr = ''.join(map(chr, range(256)))
-    out_chr = [ord('_')] * 256
-
-    for i in string.ascii_uppercase + string.ascii_lowercase + string.digits:
-      out_chr[ord(i)] = ord(i.l_
+      key = self
 ```
