@@ -129,5 +129,164 @@ class ResourceTable(object):
       # Add a prefix to avoid key duplicates.
       in_ram = 'IN_RAM' in key
       key = key.replace('IN_RAM', '')
-      key = self
+      key = self._MakeIdentifier(key)
+      while key in keys:
+        key = '_%s' % key
+      keys.add(key)
+      hashable_value = tuple(value)
+      self.entries.append(ResourceEntry(
+          index, key, value,
+          values.get(hashable_value, None),
+          self, in_ram))
+      if hashable_value not in values:
+        values[hashable_value] = key
+
+  def _ComputeIdentifierRewriteTable(self):
+    in_chr = ''.join(map(chr, range(256)))
+    out_chr = [ord('_')] * 256
+
+    # Tolerated characters.
+    for i in string.ascii_uppercase + string.ascii_lowercase + string.digits:
+      out_chr[ord(i)] = ord(i.lower())
+
+    # Rewritten characters.
+    in_rewritten = '\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09~*+=><^"|'
+    out_rewritten = '0123456789TPSeglxpv'
+    for rewrite in zip(in_rewritten, out_rewritten):
+      out_chr[ord(rewrite[0])] = ord(rewrite[1])
+
+    table = str.maketrans(
+        in_chr,
+        ''.join(map(chr, out_chr)))
+    bad_chars = '\t\n\r-:()[]"\',;'
+    self._MakeIdentifier = lambda s: s.translate(table, bad_chars)
+
+  def DeclareEntries(self, f):
+    if self.python_type != str:
+      for entry in self.entries:
+        entry.Declare(f)
+
+  def DeclareAliases(self, f):
+    for entry in self.entries:
+      entry.DeclareAlias(f)
+
+  def Compile(self, f):
+    # Write a declaration for each entry.
+    for entry in self.entries:
+      entry.Compile(f)
+
+    # Write the resource pointer table.
+    c_type = self.c_type
+    name = self.name
+    f.write(
+        '\n\nconst %(c_type)s* const %(name)s_table[] = {\n' % locals())
+    for entry in self.entries:
+      f.write('  %s,\n' % entry.variable_name)
+    f.write('};\n\n')
+
+
+class ResourceLibrary(object):
+
+  def __init__(self, root):
+    self._tables = []
+    self._root = root
+
+    # Create resource table objects for all resources.
+    for resource_tuple in root.resources:
+      # Split a multiline string into a list of strings
+      if resource_tuple[-2] == str:
+        resource_tuple = list(resource_tuple)
+        resource_tuple[0] = [
+            x for x in resource_tuple[0].split('\n') if x]
+        resource_tuple = tuple(resource_tuple)
+      self._tables.append(ResourceTable(resource_tuple))
+
+  @property
+  def max_num_entries(self):
+    max_num_entries = 0
+    for table in self._tables:
+      max_num_entries = max(max_num_entries, len(table.entries))
+    return max_num_entries
+
+  def _OpenNamespace(self, f):
+    if self._root.namespace:
+      f.write('\nnamespace %s {\n\n' % self._root.namespace)
+
+  def _CloseNamespace(self, f):
+    if self._root.namespace:
+      f.write('\n}  // namespace %s\n' % self._root.namespace)
+
+  def _DeclareTables(self, f):
+    for table in self._tables:
+      f.write(
+          'extern const %s* const %s_table[];\n\n' %
+          (table.c_type, table.name))
+
+  def _DeclareEntries(self, f):
+    for table in self._tables:
+      table.DeclareEntries(f)
+
+  def _DeclareAliases(self, f):
+    for table in self._tables:
+      table.DeclareAliases(f)
+
+  def _CompileTables(self, f):
+    for table in self._tables:
+      table.Compile(f)
+
+  def GenerateHeader(self):
+    root = self._root
+    f = open(os.path.join(root.target, 'resources.h'), 'w')
+
+    # Write header and header guard
+    header_guard = root.target.replace(os.path.sep, '_').upper()
+    header_guard = '%s_RESOURCES_H_' % header_guard
+    f.write(root.header + '\n\n')
+    f.write('#ifndef %s\n' % header_guard)
+    f.write('#define %s\n\n' % header_guard)
+    f.write(root.includes + '\n\n')
+    self._OpenNamespace(f)
+    f.write(
+        'typedef %s ResourceId;\n\n' %
+        root.types[self.max_num_entries > 255])
+    self._DeclareTables(f)
+    self._DeclareEntries(f)
+    self._DeclareAliases(f)
+    self._CloseNamespace(f)
+    f.write('\n#endif  // %s\n' % header_guard)
+    f.close()
+
+  def GenerateCc(self):
+    root = self._root
+    file_name = os.path.join(self._root.target, 'resources.cc')
+    f = open(file_name, 'w')
+    f.write(self._root.header + '\n\n')
+    f.write('#include "%s"\n' % file_name.replace('.cc', '.h'))
+    self._OpenNamespace(f)
+    self._CompileTables(f)
+    self._CloseNamespace(f)
+    f.close()
+
+
+def Compile(path):
+  # A hacky way of loading the py file passed as an argument as a module +
+  # a descent along the module path.
+  base_name = os.path.splitext(path)[0]
+  sys.path += [os.path.abspath('.')]
+  resource_module = __import__(base_name.replace('/', '.'))
+  for part in base_name.split('/')[1:]:
+    resource_module = getattr(resource_module, part)
+
+  library = ResourceLibrary(resource_module)
+  library.GenerateHeader()
+  library.GenerateCc()
+
+
+def main(argv):
+  for i in range(1, len(argv)):
+    Compile(argv[i])
+
+
+if __name__ == '__main__':
+  main(sys.argv)
 ```
